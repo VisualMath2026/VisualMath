@@ -50,6 +50,11 @@ let customExpression = "x*x";
 let customFn: ((x: number) => number) | null = null;
 let customError = "";
 
+let isDragging = false;
+let dragStartClientX = 0;
+let dragStartClientY = 0;
+let dragStartViewport: Viewport | null = null;
+
 app.innerHTML = `
   <div style="font-family: Arial, sans-serif; padding: 16px;">
     <h1>VisualMath</h1>
@@ -69,7 +74,7 @@ app.innerHTML = `
     </div>
     <div id="error" style="margin-bottom: 12px; color: #b91c1c;"></div>
     <div id="info" style="margin-bottom: 12px; color: #444;"></div>
-    <svg id="scene" width="${viewport.width}" height="${viewport.height}" viewBox="0 0 ${viewport.width} ${viewport.height}" style="border: 1px solid #ccc; background: white;"></svg>
+    <svg id="scene" width="${viewport.width}" height="${viewport.height}" viewBox="0 0 ${viewport.width} ${viewport.height}" style="border: 1px solid #ccc; background: white; cursor: grab; user-select: none;"></svg>
   </div>
 `;
 
@@ -304,7 +309,8 @@ function renderInfo(): void {
     `Функция: ${active.label} | ` +
     `Выражение: ${active.expression} | ` +
     `X: [${viewport.xMin.toFixed(2)}, ${viewport.xMax.toFixed(2)}] | ` +
-    `Y: [${viewport.yMin.toFixed(2)}, ${viewport.yMax.toFixed(2)}]`;
+    `Y: [${viewport.yMin.toFixed(2)}, ${viewport.yMax.toFixed(2)}] | ` +
+    `Drag: зажмите мышь и двигайте график`;
 }
 
 function renderError(): void {
@@ -319,11 +325,70 @@ function render(): void {
   renderScene();
 }
 
+function startDrag(event: MouseEvent): void {
+  isDragging = true;
+  dragStartClientX = event.clientX;
+  dragStartClientY = event.clientY;
+  dragStartViewport = { ...viewport };
+  svg.style.cursor = "grabbing";
+}
+
+function moveDrag(event: MouseEvent): void {
+  if (!isDragging || !dragStartViewport) {
+    return;
+  }
+
+  const dxPixels = event.clientX - dragStartClientX;
+  const dyPixels = event.clientY - dragStartClientY;
+
+  const xRange = dragStartViewport.xMax - dragStartViewport.xMin;
+  const yRange = dragStartViewport.yMax - dragStartViewport.yMin;
+
+  const dxMath = (dxPixels / dragStartViewport.width) * xRange;
+  const dyMath = (dyPixels / dragStartViewport.height) * yRange;
+
+  viewport = {
+    ...dragStartViewport,
+    xMin: dragStartViewport.xMin - dxMath,
+    xMax: dragStartViewport.xMax - dxMath,
+    yMin: dragStartViewport.yMin + dyMath,
+    yMax: dragStartViewport.yMax + dyMath
+  };
+
+  render();
+}
+
+function endDrag(): void {
+  isDragging = false;
+  dragStartViewport = null;
+  svg.style.cursor = "grab";
+}
+
 applyButton.addEventListener("click", applyCustomExpression);
 
 input.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {
     applyCustomExpression();
+  }
+});
+
+svg.addEventListener("mousedown", (event) => {
+  startDrag(event);
+});
+
+window.addEventListener("mousemove", (event) => {
+  moveDrag(event);
+});
+
+window.addEventListener("mouseup", () => {
+  if (isDragging) {
+    endDrag();
+  }
+});
+
+svg.addEventListener("mouseleave", () => {
+  if (isDragging) {
+    endDrag();
   }
 });
 
