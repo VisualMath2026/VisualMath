@@ -20,6 +20,7 @@ let viewport: Viewport = { ...initialViewport };
 type GraphDefinition = {
   key: string;
   label: string;
+  expression: string;
   fn: (x: number) => number;
 };
 
@@ -27,27 +28,46 @@ const graphs: GraphDefinition[] = [
   {
     key: "square",
     label: "y = x²",
+    expression: "x*x",
     fn: (x) => x * x
   },
   {
     key: "line",
     label: "y = x + 5",
+    expression: "x+5",
     fn: (x) => x + 5
   },
   {
     key: "sin",
     label: "y = 40 + 30·sin(x)",
+    expression: "40+30*Math.sin(x)",
     fn: (x) => 40 + 30 * Math.sin(x)
   }
 ];
 
 let activeGraphKey = "square";
+let customExpression = "x*x";
+let customFn: ((x: number) => number) | null = null;
+let customError = "";
 
 app.innerHTML = `
   <div style="font-family: Arial, sans-serif; padding: 16px;">
     <h1>VisualMath</h1>
     <div id="graph-controls" style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;"></div>
     <div id="view-controls" style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;"></div>
+    <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
+      <input
+        id="expression-input"
+        type="text"
+        value="${customExpression}"
+        placeholder="Введите выражение, например: x*x"
+        style="padding: 8px; min-width: 320px; border: 1px solid #ccc; border-radius: 6px;"
+      />
+      <button id="apply-expression" style="padding: 8px 12px; border: 1px solid #ccc; background: #ffffff; border-radius: 6px; cursor: pointer;">
+        Построить
+      </button>
+    </div>
+    <div id="error" style="margin-bottom: 12px; color: #b91c1c;"></div>
     <div id="info" style="margin-bottom: 12px; color: #444;"></div>
     <svg id="scene" width="${viewport.width}" height="${viewport.height}" viewBox="0 0 ${viewport.width} ${viewport.height}" style="border: 1px solid #ccc; background: white;"></svg>
   </div>
@@ -56,14 +76,34 @@ app.innerHTML = `
 const graphControls = document.querySelector<HTMLDivElement>("#graph-controls");
 const viewControls = document.querySelector<HTMLDivElement>("#view-controls");
 const info = document.querySelector<HTMLDivElement>("#info");
+const errorBox = document.querySelector<HTMLDivElement>("#error");
+const input = document.querySelector<HTMLInputElement>("#expression-input");
+const applyButton = document.querySelector<HTMLButtonElement>("#apply-expression");
 const svg = document.querySelector<SVGSVGElement>("#scene");
 
-if (!graphControls || !viewControls || !info || !svg) {
+if (!graphControls || !viewControls || !info || !errorBox || !input || !applyButton || !svg) {
   throw new Error("Required UI elements not found");
 }
 
-function getActiveGraph(): GraphDefinition {
+function getPresetGraph(): GraphDefinition {
   return graphs.find((graph) => graph.key === activeGraphKey) ?? graphs[0];
+}
+
+function getActiveFunction(): { label: string; expression: string; fn: (x: number) => number } {
+  if (customFn) {
+    return {
+      label: "Пользовательская функция",
+      expression: customExpression,
+      fn: customFn
+    };
+  }
+
+  const preset = getPresetGraph();
+  return {
+    label: preset.label,
+    expression: preset.expression,
+    fn: preset.fn
+  };
 }
 
 function createHtmlButton(
@@ -137,12 +177,61 @@ function resetViewport(): void {
   render();
 }
 
+function compileExpression(expression: string): ((x: number) => number) | null {
+  const trimmed = expression.trim();
+
+  if (!trimmed) {
+    customError = "Введите выражение.";
+    return null;
+  }
+
+  const allowedPattern = /^[0-9xX+\-*/().,\sA-Za-z_]*$/;
+  if (!allowedPattern.test(trimmed)) {
+    customError = "В выражении есть недопустимые символы.";
+    return null;
+  }
+
+  try {
+    const fn = new Function("x", `return (${trimmed});`) as (x: number) => number;
+    const probe = fn(1);
+
+    if (!Number.isFinite(probe)) {
+      customError = "Выражение возвращает некорректное число.";
+      return null;
+    }
+
+    customError = "";
+    return fn;
+  } catch {
+    customError = "Не удалось разобрать выражение.";
+    return null;
+  }
+}
+
+function applyCustomExpression(): void {
+  const expression = input.value;
+  const compiled = compileExpression(expression);
+
+  if (!compiled) {
+    customFn = null;
+    render();
+    return;
+  }
+
+  customExpression = expression;
+  customFn = compiled;
+  customError = "";
+  render();
+}
+
 function renderScene(): void {
   svg.innerHTML = "";
 
+  const active = getActiveFunction();
+
   const scene = buildMathScene(
     viewport,
-    getActiveGraph().fn,
+    active.fn,
     {
       xMin: viewport.xMin,
       xMax: viewport.xMax,
@@ -188,9 +277,13 @@ function renderGraphControls(): void {
         graph.label,
         () => {
           activeGraphKey = graph.key;
+          customExpression = graph.expression;
+          input.value = graph.expression;
+          customFn = null;
+          customError = "";
           render();
         },
-        graph.key === activeGraphKey
+        !customFn && graph.key === activeGraphKey
       )
     );
   }
@@ -205,18 +298,33 @@ function renderViewControls(): void {
 }
 
 function renderInfo(): void {
-  const graph = getActiveGraph();
+  const active = getActiveFunction();
+
   info.textContent =
-    `Функция: ${graph.label} | ` +
+    `Функция: ${active.label} | ` +
+    `Выражение: ${active.expression} | ` +
     `X: [${viewport.xMin.toFixed(2)}, ${viewport.xMax.toFixed(2)}] | ` +
     `Y: [${viewport.yMin.toFixed(2)}, ${viewport.yMax.toFixed(2)}]`;
+}
+
+function renderError(): void {
+  errorBox.textContent = customError;
 }
 
 function render(): void {
   renderGraphControls();
   renderViewControls();
   renderInfo();
+  renderError();
   renderScene();
 }
+
+applyButton.addEventListener("click", applyCustomExpression);
+
+input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    applyCustomExpression();
+  }
+});
 
 render();
