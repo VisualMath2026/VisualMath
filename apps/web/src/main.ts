@@ -16,6 +16,7 @@ const initialViewport: Viewport = {
 };
 
 let viewport: Viewport = { ...initialViewport };
+let lastPlot: Point2D[] = [];
 
 type GraphDefinition = {
   key: string;
@@ -58,8 +59,10 @@ let dragStartViewport: Viewport | null = null;
 app.innerHTML = `
   <div style="font-family: Arial, sans-serif; padding: 16px;">
     <h1>VisualMath</h1>
+
     <div id="graph-controls" style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;"></div>
     <div id="view-controls" style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;"></div>
+
     <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
       <input
         id="expression-input"
@@ -68,13 +71,24 @@ app.innerHTML = `
         placeholder="Введите выражение, например: x*x"
         style="padding: 8px; min-width: 320px; border: 1px solid #ccc; border-radius: 6px;"
       />
-      <button id="apply-expression" style="padding: 8px 12px; border: 1px solid #ccc; background: #ffffff; border-radius: 6px; cursor: pointer;">
+      <button
+        id="apply-expression"
+        style="padding: 8px 12px; border: 1px solid #ccc; background: #ffffff; border-radius: 6px; cursor: pointer;"
+      >
         Построить
       </button>
     </div>
+
     <div id="error" style="margin-bottom: 12px; color: #b91c1c;"></div>
     <div id="info" style="margin-bottom: 12px; color: #444;"></div>
-    <svg id="scene" width="${viewport.width}" height="${viewport.height}" viewBox="0 0 ${viewport.width} ${viewport.height}" style="border: 1px solid #ccc; background: white; cursor: grab; user-select: none;"></svg>
+
+    <svg
+      id="scene"
+      width="${viewport.width}"
+      height="${viewport.height}"
+      viewBox="0 0 ${viewport.width} ${viewport.height}"
+      style="border: 1px solid #ccc; background: white; cursor: grab; user-select: none;"
+    ></svg>
   </div>
 `;
 
@@ -88,6 +102,74 @@ const svg = document.querySelector<SVGSVGElement>("#scene");
 
 if (!graphControls || !viewControls || !info || !errorBox || !input || !applyButton || !svg) {
   throw new Error("Required UI elements not found");
+}
+
+const overlayGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
+
+const crossV = document.createElementNS("http://www.w3.org/2000/svg", "line");
+crossV.setAttribute("stroke", "#999");
+crossV.setAttribute("stroke-width", "1");
+crossV.setAttribute("opacity", "0.7");
+
+const crossH = document.createElementNS("http://www.w3.org/2000/svg", "line");
+crossH.setAttribute("stroke", "#999");
+crossH.setAttribute("stroke-width", "1");
+crossH.setAttribute("opacity", "0.7");
+
+const crossDot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+crossDot.setAttribute("r", "3");
+crossDot.setAttribute("fill", "#111");
+crossDot.setAttribute("opacity", "0.9");
+
+const tooltipBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+tooltipBg.setAttribute("fill", "#ffffff");
+tooltipBg.setAttribute("stroke", "#cccccc");
+tooltipBg.setAttribute("rx", "4");
+tooltipBg.setAttribute("ry", "4");
+tooltipBg.setAttribute("opacity", "0.95");
+
+const crossText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+crossText.setAttribute("font-size", "12");
+crossText.setAttribute("fill", "#111");
+
+overlayGroup.appendChild(crossV);
+overlayGroup.appendChild(crossH);
+overlayGroup.appendChild(crossDot);
+overlayGroup.appendChild(tooltipBg);
+overlayGroup.appendChild(crossText);
+
+function hideCrosshair(): void {
+  overlayGroup.setAttribute("display", "none");
+}
+
+function showCrosshair(): void {
+  overlayGroup.setAttribute("display", "block");
+}
+
+hideCrosshair();
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function findNearestPlotPoint(targetX: number, points: Point2D[]): Point2D | null {
+  if (points.length === 0) {
+    return null;
+  }
+
+  let nearest = points[0];
+  let minDistance = Math.abs(points[0].x - targetX);
+
+  for (let i = 1; i < points.length; i += 1) {
+    const distance = Math.abs(points[i].x - targetX);
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      nearest = points[i];
+    }
+  }
+
+  return nearest;
 }
 
 function getPresetGraph(): GraphDefinition {
@@ -124,7 +206,6 @@ function createHtmlButton(
   button.style.color = isActive ? "#ffffff" : "#000000";
   button.style.cursor = "pointer";
   button.style.borderRadius = "6px";
-
   button.addEventListener("click", onClick);
   return button;
 }
@@ -143,7 +224,7 @@ function createLine(segment: LineSegment, color: string, width = 1, opacity = 1)
 
 function createPolyline(points: Point2D[], color: string, width = 2): SVGPolylineElement {
   const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-  polyline.setAttribute("points", points.map((point) => `${point.x},${point.y}`).join(" "));
+  polyline.setAttribute("points", points.map((p) => `${p.x},${p.y}`).join(" "));
   polyline.setAttribute("fill", "none");
   polyline.setAttribute("stroke", color);
   polyline.setAttribute("stroke-width", String(width));
@@ -263,17 +344,15 @@ function renderScene(): void {
 
   const active = getActiveFunction();
 
-  const scene = buildMathScene(
-    viewport,
-    active.fn,
-    {
-      xMin: viewport.xMin,
-      xMax: viewport.xMax,
-      steps: 300,
-      stepX: Math.max(1, Math.round((viewport.xMax - viewport.xMin) / 10)),
-      stepY: Math.max(1, Math.round((viewport.yMax - viewport.yMin) / 10))
-    }
-  );
+  const scene = buildMathScene(viewport, active.fn, {
+    xMin: viewport.xMin,
+    xMax: viewport.xMax,
+    steps: 300,
+    stepX: Math.max(1, Math.round((viewport.xMax - viewport.xMin) / 10)),
+    stepY: Math.max(1, Math.round((viewport.yMax - viewport.yMin) / 10))
+  });
+
+  lastPlot = scene.plot;
 
   for (const line of scene.grid.vertical) {
     svg.appendChild(createLine(line, "#dddddd", 1, 1));
@@ -300,6 +379,7 @@ function renderScene(): void {
   }
 
   svg.appendChild(createPolyline(scene.plot, "#2563eb", 2));
+  svg.appendChild(overlayGroup);
 }
 
 function renderGraphControls(): void {
@@ -325,7 +405,6 @@ function renderGraphControls(): void {
 
 function renderViewControls(): void {
   viewControls.innerHTML = "";
-
   viewControls.appendChild(createHtmlButton("Zoom In", () => zoom(0.8)));
   viewControls.appendChild(createHtmlButton("Zoom Out", () => zoom(1.25)));
   viewControls.appendChild(createHtmlButton("Reset", () => resetViewport()));
@@ -339,7 +418,7 @@ function renderInfo(): void {
     `Выражение: ${active.expression} | ` +
     `X: [${viewport.xMin.toFixed(2)}, ${viewport.xMax.toFixed(2)}] | ` +
     `Y: [${viewport.yMin.toFixed(2)}, ${viewport.yMax.toFixed(2)}] | ` +
-    `Drag: мышь | Wheel: zoom`;
+    `Drag: мышь | Wheel: zoom | Hover: snap`;
 }
 
 function renderError(): void {
@@ -360,6 +439,7 @@ function startDrag(event: MouseEvent): void {
   dragStartClientY = event.clientY;
   dragStartViewport = { ...viewport };
   svg.style.cursor = "grabbing";
+  hideCrosshair();
 }
 
 function moveDrag(event: MouseEvent): void {
@@ -393,6 +473,68 @@ function endDrag(): void {
   svg.style.cursor = "grab";
 }
 
+function updateCrosshair(event: MouseEvent): void {
+  if (isDragging) {
+    return;
+  }
+
+  const rect = svg.getBoundingClientRect();
+  const localX = clamp(event.clientX - rect.left, 0, viewport.width);
+
+  const nearest = findNearestPlotPoint(localX, lastPlot);
+  if (!nearest) {
+    hideCrosshair();
+    return;
+  }
+
+  const xRange = viewport.xMax - viewport.xMin;
+  const yRange = viewport.yMax - viewport.yMin;
+
+  const mathX = viewport.xMin + (nearest.x / viewport.width) * xRange;
+  const mathY = viewport.yMax - (nearest.y / viewport.height) * yRange;
+
+  let fxText = "";
+  try {
+    const fx = getActiveFunction().fn(mathX);
+    fxText = Number.isFinite(fx) ? `, f(x)=${fx.toFixed(4)}` : ", f(x)=NaN";
+  } catch {
+    fxText = ", f(x)=ERR";
+  }
+
+  const textValue = `x=${mathX.toFixed(4)}, y=${mathY.toFixed(4)}${fxText}`;
+
+  crossV.setAttribute("x1", String(nearest.x));
+  crossV.setAttribute("y1", "0");
+  crossV.setAttribute("x2", String(nearest.x));
+  crossV.setAttribute("y2", String(viewport.height));
+
+  crossH.setAttribute("x1", "0");
+  crossH.setAttribute("y1", String(nearest.y));
+  crossH.setAttribute("x2", String(viewport.width));
+  crossH.setAttribute("y2", String(nearest.y));
+
+  crossDot.setAttribute("cx", String(nearest.x));
+  crossDot.setAttribute("cy", String(nearest.y));
+
+  crossText.textContent = textValue;
+
+  const tooltipX = nearest.x + 8;
+  const tooltipY = nearest.y - 8;
+
+  crossText.setAttribute("x", String(tooltipX + 6));
+  crossText.setAttribute("y", String(tooltipY + 14));
+
+  const tooltipWidth = Math.max(110, textValue.length * 7);
+  const tooltipHeight = 22;
+
+  tooltipBg.setAttribute("x", String(tooltipX));
+  tooltipBg.setAttribute("y", String(tooltipY));
+  tooltipBg.setAttribute("width", String(tooltipWidth));
+  tooltipBg.setAttribute("height", String(tooltipHeight));
+
+  showCrosshair();
+}
+
 applyButton.addEventListener("click", applyCustomExpression);
 
 input.addEventListener("keydown", (event) => {
@@ -415,17 +557,26 @@ window.addEventListener("mouseup", () => {
   }
 });
 
+svg.addEventListener("wheel", (event) => {
+  event.preventDefault();
+  const factor = event.deltaY < 0 ? 0.9 : 1.1;
+  zoomAtPoint(event.clientX, event.clientY, factor);
+});
+
+svg.addEventListener("mousemove", (event) => {
+  updateCrosshair(event);
+});
+
+svg.addEventListener("mouseenter", () => {
+  showCrosshair();
+});
+
 svg.addEventListener("mouseleave", () => {
   if (isDragging) {
     endDrag();
+  } else {
+    hideCrosshair();
   }
-});
-
-svg.addEventListener("wheel", (event) => {
-  event.preventDefault();
-
-  const factor = event.deltaY < 0 ? 0.9 : 1.1;
-  zoomAtPoint(event.clientX, event.clientY, factor);
 });
 
 render();
