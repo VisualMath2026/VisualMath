@@ -6,7 +6,7 @@ if (!app) {
   throw new Error("Root element #app not found");
 }
 
-const viewport: Viewport = {
+const initialViewport: Viewport = {
   width: 800,
   height: 600,
   xMin: -10,
@@ -14,6 +14,8 @@ const viewport: Viewport = {
   yMin: -10,
   yMax: 100
 };
+
+let viewport: Viewport = { ...initialViewport };
 
 type GraphDefinition = {
   key: string;
@@ -44,20 +46,42 @@ let activeGraphKey = "square";
 app.innerHTML = `
   <div style="font-family: Arial, sans-serif; padding: 16px;">
     <h1>VisualMath</h1>
-    <div id="controls" style="display: flex; gap: 8px; margin-bottom: 12px;"></div>
+    <div id="graph-controls" style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;"></div>
+    <div id="view-controls" style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;"></div>
+    <div id="info" style="margin-bottom: 12px; color: #444;"></div>
     <svg id="scene" width="${viewport.width}" height="${viewport.height}" viewBox="0 0 ${viewport.width} ${viewport.height}" style="border: 1px solid #ccc; background: white;"></svg>
   </div>
 `;
 
-const controls = document.querySelector<HTMLDivElement>("#controls");
+const graphControls = document.querySelector<HTMLDivElement>("#graph-controls");
+const viewControls = document.querySelector<HTMLDivElement>("#view-controls");
+const info = document.querySelector<HTMLDivElement>("#info");
 const svg = document.querySelector<SVGSVGElement>("#scene");
 
-if (!controls) {
-  throw new Error("Controls element not found");
+if (!graphControls || !viewControls || !info || !svg) {
+  throw new Error("Required UI elements not found");
 }
 
-if (!svg) {
-  throw new Error("SVG element not found");
+function getActiveGraph(): GraphDefinition {
+  return graphs.find((graph) => graph.key === activeGraphKey) ?? graphs[0];
+}
+
+function createHtmlButton(
+  text: string,
+  onClick: () => void,
+  isActive = false
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.textContent = text;
+  button.style.padding = "8px 12px";
+  button.style.border = "1px solid #ccc";
+  button.style.background = isActive ? "#2563eb" : "#ffffff";
+  button.style.color = isActive ? "#ffffff" : "#000000";
+  button.style.cursor = "pointer";
+  button.style.borderRadius = "6px";
+
+  button.addEventListener("click", onClick);
+  return button;
 }
 
 function createLine(segment: LineSegment, color: string, width = 1, opacity = 1): SVGLineElement {
@@ -91,20 +115,40 @@ function createLabel(point: Point2D, textValue: string): SVGTextElement {
   return text;
 }
 
+function zoom(factor: number): void {
+  const centerX = (viewport.xMin + viewport.xMax) / 2;
+  const centerY = (viewport.yMin + viewport.yMax) / 2;
+  const halfWidth = ((viewport.xMax - viewport.xMin) / 2) * factor;
+  const halfHeight = ((viewport.yMax - viewport.yMin) / 2) * factor;
+
+  viewport = {
+    ...viewport,
+    xMin: centerX - halfWidth,
+    xMax: centerX + halfWidth,
+    yMin: centerY - halfHeight,
+    yMax: centerY + halfHeight
+  };
+
+  render();
+}
+
+function resetViewport(): void {
+  viewport = { ...initialViewport };
+  render();
+}
+
 function renderScene(): void {
   svg.innerHTML = "";
 
-  const activeGraph = graphs.find((graph) => graph.key === activeGraphKey) ?? graphs[0];
-
   const scene = buildMathScene(
     viewport,
-    activeGraph.fn,
+    getActiveGraph().fn,
     {
-      xMin: -10,
-      xMax: 10,
-      steps: 200,
-      stepX: 2,
-      stepY: 10
+      xMin: viewport.xMin,
+      xMax: viewport.xMax,
+      steps: 300,
+      stepX: Math.max(1, Math.round((viewport.xMax - viewport.xMin) / 10)),
+      stepY: Math.max(1, Math.round((viewport.yMax - viewport.yMin) / 10))
     }
   );
 
@@ -135,28 +179,44 @@ function renderScene(): void {
   svg.appendChild(createPolyline(scene.plot, "#2563eb", 2));
 }
 
-function renderControls(): void {
-  controls.innerHTML = "";
+function renderGraphControls(): void {
+  graphControls.innerHTML = "";
 
   for (const graph of graphs) {
-    const button = document.createElement("button");
-    button.textContent = graph.label;
-    button.style.padding = "8px 12px";
-    button.style.border = "1px solid #ccc";
-    button.style.background = graph.key === activeGraphKey ? "#2563eb" : "#ffffff";
-    button.style.color = graph.key === activeGraphKey ? "#ffffff" : "#000000";
-    button.style.cursor = "pointer";
-    button.style.borderRadius = "6px";
-
-    button.addEventListener("click", () => {
-      activeGraphKey = graph.key;
-      renderControls();
-      renderScene();
-    });
-
-    controls.appendChild(button);
+    graphControls.appendChild(
+      createHtmlButton(
+        graph.label,
+        () => {
+          activeGraphKey = graph.key;
+          render();
+        },
+        graph.key === activeGraphKey
+      )
+    );
   }
 }
 
-renderControls();
-renderScene();
+function renderViewControls(): void {
+  viewControls.innerHTML = "";
+
+  viewControls.appendChild(createHtmlButton("Zoom In", () => zoom(0.8)));
+  viewControls.appendChild(createHtmlButton("Zoom Out", () => zoom(1.25)));
+  viewControls.appendChild(createHtmlButton("Reset", () => resetViewport()));
+}
+
+function renderInfo(): void {
+  const graph = getActiveGraph();
+  info.textContent =
+    `Функция: ${graph.label} | ` +
+    `X: [${viewport.xMin.toFixed(2)}, ${viewport.xMax.toFixed(2)}] | ` +
+    `Y: [${viewport.yMin.toFixed(2)}, ${viewport.yMax.toFixed(2)}]`;
+}
+
+function render(): void {
+  renderGraphControls();
+  renderViewControls();
+  renderInfo();
+  renderScene();
+}
+
+render();
