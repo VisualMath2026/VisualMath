@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "baseUrl": ".",
+    "paths": {
+      "@vm/shared": ["packages/shared/src"],
+      "@vm/shared/*": ["packages/shared/src/*"],
+      "@vm/vm-api": ["packages/vm-api/src"],
+      "@vm/vm-api/*": ["packages/vm-api/src/*"],
+      "@vm/vm-graphics": ["packages/vm-graphics/src"],
+      "@vm/vm-graphics/*": ["packages/vm-graphics/src/*"]
+    }
+  }
+}
