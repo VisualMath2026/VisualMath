@@ -156,3 +156,156 @@ export class VmApiClient {
     return headers;
   }
 }
+export interface VmSocketConfig {
+  url: string;
+  getAccessToken?: () => string | null;
+  reconnectIntervalMs?: number;
+  maxReconnectIntervalMs?: number;
+}
+
+export type VmSocketStatus = "idle" | "connecting" | "open" | "closed";
+
+export class VmSocketClient {
+  private readonly url: string;
+  private readonly getAccessToken?: () => string | null;
+  private readonly reconnectIntervalMs: number;
+  private readonly maxReconnectIntervalMs: number;
+
+  private socket: WebSocket | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
+  private manuallyClosed = false;
+  private status: VmSocketStatus = "idle";
+
+  private readonly messageListeners = new Set<(data: unknown) => void>();
+  private readonly statusListeners = new Set<(status: VmSocketStatus) => void>();
+
+  constructor(config: VmSocketConfig) {
+    this.url = config.url;
+    this.getAccessToken = config.getAccessToken;
+    this.reconnectIntervalMs = config.reconnectIntervalMs ?? 1000;
+    this.maxReconnectIntervalMs = config.maxReconnectIntervalMs ?? 10000;
+  }
+
+  public connect(): void {
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    this.manuallyClosed = false;
+    this.setStatus("connecting");
+
+    const socketUrl = this.buildSocketUrl();
+    this.socket = new WebSocket(socketUrl);
+
+    this.socket.onopen = () => {
+      this.reconnectAttempts = 0;
+      this.setStatus("open");
+    };
+
+    this.socket.onmessage = (event: MessageEvent<string>) => {
+      const parsed = this.safeParse(event.data);
+      for (const listener of this.messageListeners) {
+        listener(parsed);
+      }
+    };
+
+    this.socket.onclose = () => {
+      this.socket = null;
+      this.setStatus("closed");
+
+      if (!this.manuallyClosed) {
+        this.scheduleReconnect();
+      }
+    };
+
+    this.socket.onerror = () => {
+      // Ошибка детали не гарантирует, onclose обычно сработает следом.
+    };
+  }
+
+  public disconnect(): void {
+    this.manuallyClosed = true;
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    if (this.socket) {
+      this.socket.close();
+      this.socket = null;
+    }
+
+    this.setStatus("closed");
+  }
+
+  public send(data: unknown): void {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      throw new Error("WebSocket is not connected");
+    }
+
+    this.socket.send(JSON.stringify(data));
+  }
+
+  public onMessage(listener: (data: unknown) => void): () => void {
+    this.messageListeners.add(listener);
+
+    return () => {
+      this.messageListeners.delete(listener);
+    };
+  }
+
+  public onStatusChange(listener: (status: VmSocketStatus) => void): () => void {
+    this.statusListeners.add(listener);
+    listener(this.status);
+
+    return () => {
+      this.statusListeners.delete(listener);
+    };
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+
+    const delay = Math.min(
+      this.reconnectIntervalMs * Math.pow(2, this.reconnectAttempts),
+      this.maxReconnectIntervalMs
+    );
+
+    this.reconnectAttempts += 1;
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
+  }
+
+  private buildSocketUrl(): string {
+    const token = this.getAccessToken?.();
+    if (!token) {
+      return this.url;
+    }
+
+    const separator = this.url.includes("?") ? "&" : "?";
+    return `${this.url}${separator}token=${encodeURIComponent(token)}`;
+  }
+
+  private safeParse(raw: string): unknown {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return raw;
+    }
+  }
+
+  private setStatus(status: VmSocketStatus): void {
+    this.status = status;
+
+    for (const listener of this.statusListeners) {
+      listener(status);
+    }
+  }
+}
