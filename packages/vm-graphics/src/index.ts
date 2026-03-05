@@ -137,4 +137,63 @@ export function buildGrid(
     vertical,
     horizontal
   };
+}export interface TickLabel {
+  value: number;
+  position: Point2D;
+  text: string;
+}
+
+export interface AxisTicks {
+  x: TickLabel[];
+  y: TickLabel[];
+}
+
+export function buildAxisTicks(
+  viewport: Viewport,
+  options: GridOptions
+): AxisTicks {
+  const x: TickLabel[] = [];
+  const y: TickLabel[] = [];
+
+  const xAxisScreenY =
+    viewport.yMin <= 0 && viewport.yMax >= 0
+      ? toScreenY(0, viewport)
+      : viewport.height;
+
+  const yAxisScreenX =
+    viewport.xMin <= 0 && viewport.xMax >= 0
+      ? toScreenX(0, viewport)
+      : 0;
+
+  if (options.stepX > 0) {
+    const startX = Math.ceil(viewport.xMin / options.stepX) * options.stepX;
+
+    for (let value = startX; value <= viewport.xMax; value += options.stepX) {
+      x.push({
+        value,
+        position: {
+          x: toScreenX(value, viewport),
+          y: xAxisScreenY
+        },
+        text: String(value)
+      });
+    }
+  }
+
+  if (options.stepY > 0) {
+    const startY = Math.ceil(viewport.yMin / options.stepY) * options.stepY;
+
+    for (let value = startY; value <= viewport.yMax; value += options.stepY) {
+      y.push({
+        value,
+        position: {
+          x: yAxisScreenX,
+          y: toScreenY(value, viewport)
+        },
+        text: String(value)
+      });
+    }
+  }
+
+  return { x, y };
 }
