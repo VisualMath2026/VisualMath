@@ -177,6 +177,35 @@ function zoom(factor: number): void {
   render();
 }
 
+function zoomAtPoint(clientX: number, clientY: number, factor: number): void {
+  const rect = svg.getBoundingClientRect();
+
+  const localX = clientX - rect.left;
+  const localY = clientY - rect.top;
+
+  const xRatio = localX / viewport.width;
+  const yRatio = localY / viewport.height;
+
+  const oldXRange = viewport.xMax - viewport.xMin;
+  const oldYRange = viewport.yMax - viewport.yMin;
+
+  const mouseMathX = viewport.xMin + xRatio * oldXRange;
+  const mouseMathY = viewport.yMax - yRatio * oldYRange;
+
+  const newXRange = oldXRange * factor;
+  const newYRange = oldYRange * factor;
+
+  viewport = {
+    ...viewport,
+    xMin: mouseMathX - xRatio * newXRange,
+    xMax: mouseMathX + (1 - xRatio) * newXRange,
+    yMin: mouseMathY - (1 - yRatio) * newYRange,
+    yMax: mouseMathY + yRatio * newYRange
+  };
+
+  render();
+}
+
 function resetViewport(): void {
   viewport = { ...initialViewport };
   render();
@@ -310,7 +339,7 @@ function renderInfo(): void {
     `Выражение: ${active.expression} | ` +
     `X: [${viewport.xMin.toFixed(2)}, ${viewport.xMax.toFixed(2)}] | ` +
     `Y: [${viewport.yMin.toFixed(2)}, ${viewport.yMax.toFixed(2)}] | ` +
-    `Drag: зажмите мышь и двигайте график`;
+    `Drag: мышь | Wheel: zoom`;
 }
 
 function renderError(): void {
@@ -390,6 +419,13 @@ svg.addEventListener("mouseleave", () => {
   if (isDragging) {
     endDrag();
   }
+});
+
+svg.addEventListener("wheel", (event) => {
+  event.preventDefault();
+
+  const factor = event.deltaY < 0 ? 0.9 : 1.1;
+  zoomAtPoint(event.clientX, event.clientY, factor);
 });
 
 render();
