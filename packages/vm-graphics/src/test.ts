@@ -1,4 +1,5 @@
 import {
+  buildAxisTicks,
   buildGrid,
   buildPolyline,
   buildXAxis,
@@ -34,6 +35,12 @@ function run(): void {
     stepY: 10
   });
   console.log("GRID:", grid);
+
+  const ticks = buildAxisTicks(viewport, {
+    stepX: 2,
+    stepY: 10
+  });
+  console.log("TICKS:", JSON.stringify(ticks, null, 2));
 }
 
 run();

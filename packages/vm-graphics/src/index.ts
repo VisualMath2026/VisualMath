@@ -137,7 +137,8 @@ export function buildGrid(
     vertical,
     horizontal
   };
-}export interface TickLabel {
+}
+export interface TickLabel {
   value: number;
   position: Point2D;
   text: string;
