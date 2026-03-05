@@ -198,3 +198,45 @@ export function buildAxisTicks(
 
   return { x, y };
 }
+export interface FunctionPlotOptions extends GridOptions {
+  xMin: number;
+  xMax: number;
+  steps: number;
+}
+
+export interface MathScene {
+  viewport: Viewport;
+  xAxis: LineSegment | null;
+  yAxis: LineSegment | null;
+  grid: GridLines;
+  ticks: AxisTicks;
+  plot: Point2D[];
+}
+
+export function buildMathScene(
+  viewport: Viewport,
+  fn: (x: number) => number,
+  options: FunctionPlotOptions
+): MathScene {
+  const mathPoints = sampleFunction(fn, options.xMin, options.xMax, options.steps);
+  const plot = buildPolyline(mathPoints, viewport);
+  const xAxis = buildXAxis(viewport);
+  const yAxis = buildYAxis(viewport);
+  const grid = buildGrid(viewport, {
+    stepX: options.stepX,
+    stepY: options.stepY
+  });
+  const ticks = buildAxisTicks(viewport, {
+    stepX: options.stepX,
+    stepY: options.stepY
+  });
+
+  return {
+    viewport,
+    xAxis,
+    yAxis,
+    grid,
+    ticks,
+    plot
+  };
+}

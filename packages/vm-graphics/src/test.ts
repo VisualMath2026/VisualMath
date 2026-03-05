@@ -1,10 +1,5 @@
 import {
-  buildAxisTicks,
-  buildGrid,
-  buildPolyline,
-  buildXAxis,
-  buildYAxis,
-  sampleFunction,
+  buildMathScene,
   type Viewport
 } from "./index";
 
@@ -18,29 +13,19 @@ function run(): void {
     yMax: 100
   };
 
-  const mathPoints = sampleFunction((x) => x * x, -10, 10, 10);
-  console.log("MATH POINTS:", mathPoints);
+  const scene = buildMathScene(
+    viewport,
+    (x) => x * x,
+    {
+      xMin: -10,
+      xMax: 10,
+      steps: 10,
+      stepX: 2,
+      stepY: 10
+    }
+  );
 
-  const screenPoints = buildPolyline(mathPoints, viewport);
-  console.log("SCREEN POINTS:", screenPoints);
-
-  const xAxis = buildXAxis(viewport);
-  console.log("X AXIS:", xAxis);
-
-  const yAxis = buildYAxis(viewport);
-  console.log("Y AXIS:", yAxis);
-
-  const grid = buildGrid(viewport, {
-    stepX: 2,
-    stepY: 10
-  });
-  console.log("GRID:", grid);
-
-  const ticks = buildAxisTicks(viewport, {
-    stepX: 2,
-    stepY: 10
-  });
-  console.log("TICKS:", JSON.stringify(ticks, null, 2));
+  console.log("SCENE:", JSON.stringify(scene, null, 2));
 }
 
 run();
