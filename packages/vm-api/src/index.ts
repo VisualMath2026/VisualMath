@@ -309,3 +309,24 @@ export class VmSocketClient {
     }
   }
 }
+import type { LectureSummary } from "@vm/shared";
+
+export class VisualMathApi {
+  private readonly client: VmApiClient;
+
+  constructor(config: VmApiConfig) {
+    this.client = new VmApiClient(config);
+  }
+
+  public getLectures(): Promise<LectureSummary[]> {
+    return this.client.get<LectureSummary[]>("/lectures");
+  }
+
+  public getHealth(): Promise<{
+    status: string;
+    service: string;
+    time: string;
+  }> {
+    return this.client.get("/health");
+  }
+}
