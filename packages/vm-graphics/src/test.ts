@@ -1,5 +1,7 @@
 import {
   buildPolyline,
+  buildXAxis,
+  buildYAxis,
   sampleFunction,
   type Viewport
 } from "./index";
@@ -19,6 +21,12 @@ function run(): void {
 
   const screenPoints = buildPolyline(mathPoints, viewport);
   console.log("SCREEN POINTS:", screenPoints);
+
+  const xAxis = buildXAxis(viewport);
+  console.log("X AXIS:", xAxis);
+
+  const yAxis = buildYAxis(viewport);
+  console.log("Y AXIS:", yAxis);
 }
 
 run();

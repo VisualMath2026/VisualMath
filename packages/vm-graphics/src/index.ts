@@ -68,3 +68,29 @@ export function buildPolyline(
 ): Point2D[] {
   return points.map((point) => toScreenPoint(point, viewport));
 }
+export interface LineSegment {
+  start: Point2D;
+  end: Point2D;
+}
+
+export function buildXAxis(viewport: Viewport): LineSegment | null {
+  if (viewport.yMin > 0 || viewport.yMax < 0) {
+    return null;
+  }
+
+  return {
+    start: toScreenPoint({ x: viewport.xMin, y: 0 }, viewport),
+    end: toScreenPoint({ x: viewport.xMax, y: 0 }, viewport)
+  };
+}
+
+export function buildYAxis(viewport: Viewport): LineSegment | null {
+  if (viewport.xMin > 0 || viewport.xMax < 0) {
+    return null;
+  }
+
+  return {
+    start: toScreenPoint({ x: 0, y: viewport.yMin }, viewport),
+    end: toScreenPoint({ x: 0, y: viewport.yMax }, viewport)
+  };
+}
