@@ -94,3 +94,47 @@ export function buildYAxis(viewport: Viewport): LineSegment | null {
     end: toScreenPoint({ x: 0, y: viewport.yMax }, viewport)
   };
 }
+export interface GridLines {
+  vertical: LineSegment[];
+  horizontal: LineSegment[];
+}
+
+export interface GridOptions {
+  stepX: number;
+  stepY: number;
+}
+
+export function buildGrid(
+  viewport: Viewport,
+  options: GridOptions
+): GridLines {
+  const vertical: LineSegment[] = [];
+  const horizontal: LineSegment[] = [];
+
+  if (options.stepX > 0) {
+    const startX = Math.ceil(viewport.xMin / options.stepX) * options.stepX;
+
+    for (let x = startX; x <= viewport.xMax; x += options.stepX) {
+      vertical.push({
+        start: toScreenPoint({ x, y: viewport.yMin }, viewport),
+        end: toScreenPoint({ x, y: viewport.yMax }, viewport)
+      });
+    }
+  }
+
+  if (options.stepY > 0) {
+    const startY = Math.ceil(viewport.yMin / options.stepY) * options.stepY;
+
+    for (let y = startY; y <= viewport.yMax; y += options.stepY) {
+      horizontal.push({
+        start: toScreenPoint({ x: viewport.xMin, y }, viewport),
+        end: toScreenPoint({ x: viewport.xMax, y }, viewport)
+      });
+    }
+  }
+
+  return {
+    vertical,
+    horizontal
+  };
+}

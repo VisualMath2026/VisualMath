@@ -1,4 +1,5 @@
 import {
+  buildGrid,
   buildPolyline,
   buildXAxis,
   buildYAxis,
@@ -27,6 +28,12 @@ function run(): void {
 
   const yAxis = buildYAxis(viewport);
   console.log("Y AXIS:", yAxis);
+
+  const grid = buildGrid(viewport, {
+    stepX: 2,
+    stepY: 10
+  });
+  console.log("GRID:", grid);
 }
 
 run();
