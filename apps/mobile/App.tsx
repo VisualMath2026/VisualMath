@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -7,89 +7,32 @@ import {
   Text,
   View
 } from "react-native";
-import {
-  API_BASE_URL,
-  ApiError,
-  lecturesUrl,
-  visualMathApi
-} from "./src/api/client";
+import { API_BASE_URL, lecturesUrl } from "./src/api/client";
 import { TabBar } from "./src/components/TabBar";
 import { LectureDetailsScreen } from "./src/screens/LectureDetailsScreen";
 import { LectureListScreen } from "./src/screens/LectureListScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { useLectures } from "./src/hooks/useLectures";
 import { appStyles as styles } from "./src/styles/appStyles";
 import type { Lecture, TabKey } from "./src/types/lecture";
 import { getLectureKey } from "./src/utils/lecture";
 
 export default function App(): React.JSX.Element {
-  const [lectures, setLectures] = useState<Lecture[]>([]);
   const [activeTab, setActiveTab] = useState<TabKey>("lectures");
   const [selectedLectureId, setSelectedLectureId] = useState<string | null>(null);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [settingsReloading, setSettingsReloading] = useState(false);
-  const [healthLoading, setHealthLoading] = useState(false);
-  const [healthText, setHealthText] = useState<string>("Не проверялось");
-  const [error, setError] = useState<string | null>(null);
 
-  const loadLectures = useCallback(async (): Promise<boolean> => {
-    try {
-      setError(null);
-
-      const data = await visualMathApi.getLectures();
-      setLectures(data as unknown as Lecture[]);
-
-      return true;
-    } catch (err) {
-      let message = "Не удалось загрузить лекции";
-
-      if (err instanceof ApiError) {
-        if (err.status === 408) {
-          message = "Таймаут запроса к серверу";
-        } else if (err.status === 0) {
-          message = "Сетевая ошибка: сервер недоступен";
-        } else {
-          message = `Ошибка API: ${err.status}`;
-        }
-      } else if (err instanceof Error) {
-        message = err.message;
-      }
-
-      setError(message);
-      setLectures([]);
-      setSelectedLectureId(null);
-      return false;
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-      setSettingsReloading(false);
-    }
-  }, []);
-
-  const checkHealth = useCallback(async () => {
-    try {
-      setHealthLoading(true);
-
-      const health = await visualMathApi.getHealth();
-      setHealthText(`${health.status} • ${health.service} • ${health.time}`);
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setHealthText(`Ошибка health-check: ${err.status}`);
-      } else if (err instanceof Error) {
-        setHealthText(`Ошибка: ${err.message}`);
-      } else {
-        setHealthText("Не удалось получить health-check");
-      }
-    } finally {
-      setHealthLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadLectures();
-    void checkHealth();
-  }, [checkHealth, loadLectures]);
+  const {
+    lectures,
+    loading,
+    refreshing,
+    settingsReloading,
+    healthLoading,
+    healthText,
+    error,
+    refreshLectures,
+    refreshFromSettings
+  } = useLectures();
 
   const selectedLecture = useMemo(() => {
     if (!selectedLectureId) {
@@ -109,22 +52,15 @@ export default function App(): React.JSX.Element {
     );
   }, [favoriteIds, lectures]);
 
-  const handlePullToRefresh = useCallback(() => {
-    setRefreshing(true);
-    void loadLectures();
-  }, [loadLectures]);
-
   const handleSettingsRefresh = useCallback(async () => {
-    setSettingsReloading(true);
-    const ok = await loadLectures();
-    await checkHealth();
+    const ok = await refreshFromSettings();
 
     if (ok) {
       Alert.alert("Готово", "Данные обновлены через @vm/vm-api");
     } else {
       Alert.alert("Ошибка", "Не удалось обновить данные");
     }
-  }, [checkHealth, loadLectures]);
+  }, [refreshFromSettings]);
 
   const switchTab = useCallback((tab: TabKey) => {
     setActiveTab(tab);
@@ -193,7 +129,7 @@ export default function App(): React.JSX.Element {
           emptyText="Избранных лекций пока нет."
           favoriteIds={favoriteIds}
           refreshing={refreshing}
-          onRefresh={handlePullToRefresh}
+          onRefresh={refreshLectures}
           onOpenLecture={openLecture}
         />
       );
@@ -219,7 +155,7 @@ export default function App(): React.JSX.Element {
         emptyText="Лекции не найдены."
         favoriteIds={favoriteIds}
         refreshing={refreshing}
-        onRefresh={handlePullToRefresh}
+        onRefresh={refreshLectures}
         onOpenLecture={openLecture}
       />
     );
