@@ -9,10 +9,11 @@ import {
 } from "react-native";
 import { API_BASE_URL, lecturesUrl } from "./src/api/client";
 import { TabBar } from "./src/components/TabBar";
+import { useFavorites } from "./src/hooks/useFavorites";
+import { useLectures } from "./src/hooks/useLectures";
 import { LectureDetailsScreen } from "./src/screens/LectureDetailsScreen";
 import { LectureListScreen } from "./src/screens/LectureListScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
-import { useLectures } from "./src/hooks/useLectures";
 import { appStyles as styles } from "./src/styles/appStyles";
 import type { Lecture, TabKey } from "./src/types/lecture";
 import { getLectureKey } from "./src/utils/lecture";
@@ -20,7 +21,6 @@ import { getLectureKey } from "./src/utils/lecture";
 export default function App(): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<TabKey>("lectures");
   const [selectedLectureId, setSelectedLectureId] = useState<string | null>(null);
-  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
 
   const {
     lectures,
@@ -34,6 +34,9 @@ export default function App(): React.JSX.Element {
     refreshFromSettings
   } = useLectures();
 
+  const { favoriteIds, favoriteLectures, isFavorite, toggleFavorite } =
+    useFavorites(lectures);
+
   const selectedLecture = useMemo(() => {
     if (!selectedLectureId) {
       return null;
@@ -45,12 +48,6 @@ export default function App(): React.JSX.Element {
       ) ?? null
     );
   }, [lectures, selectedLectureId]);
-
-  const favoriteLectures = useMemo(() => {
-    return lectures.filter((lecture, index) =>
-      favoriteIds.includes(getLectureKey(lecture, index))
-    );
-  }, [favoriteIds, lectures]);
 
   const handleSettingsRefresh = useCallback(async () => {
     const ok = await refreshFromSettings();
@@ -76,14 +73,6 @@ export default function App(): React.JSX.Element {
     setSelectedLectureId(null);
   }, []);
 
-  const toggleFavorite = useCallback((lecture: Lecture, index = 0) => {
-    const key = getLectureKey(lecture, index);
-
-    setFavoriteIds((prev) =>
-      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
-    );
-  }, []);
-
   const renderContent = () => {
     if (loading) {
       return (
@@ -107,11 +96,7 @@ export default function App(): React.JSX.Element {
       return (
         <LectureDetailsScreen
           lecture={selectedLecture}
-          isFavorite={
-            selectedLecture
-              ? favoriteIds.includes(getLectureKey(selectedLecture))
-              : false
-          }
+          isFavorite={selectedLecture ? isFavorite(selectedLecture) : false}
           onBack={closeLecture}
           onToggleFavorite={() => {
             if (selectedLecture) {
