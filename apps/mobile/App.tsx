@@ -5,10 +5,13 @@ import {
   SafeAreaView,
   StatusBar,
   Text,
+  TextInput,
+  TouchableOpacity,
   View
 } from "react-native";
 import { API_BASE_URL, lecturesUrl } from "./src/api/client";
 import { TabBar } from "./src/components/TabBar";
+import { useAuth } from "./src/hooks/useAuth";
 import { useFavorites } from "./src/hooks/useFavorites";
 import { useLectures } from "./src/hooks/useLectures";
 import { LectureDetailsScreen } from "./src/screens/LectureDetailsScreen";
@@ -21,6 +24,17 @@ import { getLectureKey } from "./src/utils/lecture";
 export default function App(): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<TabKey>("lectures");
   const [selectedLectureId, setSelectedLectureId] = useState<string | null>(null);
+  const [demoName, setDemoName] = useState("");
+  const [demoRole, setDemoRole] = useState<"student" | "teacher">("student");
+
+  const {
+    token,
+    user,
+    authHydrated,
+    isAuthenticated,
+    login,
+    logout
+  } = useAuth();
 
   const {
     lectures,
@@ -64,6 +78,33 @@ export default function App(): React.JSX.Element {
     }
   }, [refreshFromSettings]);
 
+  const handleDemoLogin = useCallback(async () => {
+    const normalizedName = demoName.trim();
+
+    if (!normalizedName) {
+      Alert.alert("Ошибка", "Введите имя");
+      return;
+    }
+
+    await login({
+      token: "demo-token",
+      user: {
+        id: "demo-user",
+        name: normalizedName,
+        role: demoRole,
+        group: demoRole === "student" ? "ИВТ-101" : undefined
+      }
+    });
+
+    setDemoName("");
+  }, [demoName, demoRole, login]);
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    setSelectedLectureId(null);
+    setActiveTab("lectures");
+  }, [logout]);
+
   const switchTab = useCallback((tab: TabKey) => {
     setActiveTab(tab);
     setSelectedLectureId(null);
@@ -78,14 +119,112 @@ export default function App(): React.JSX.Element {
     setSelectedLectureId(null);
   }, []);
 
+  const renderLoginScreen = () => {
+    return (
+      <View style={styles.centerBlock}>
+        <View
+          style={{
+            width: "100%",
+            backgroundColor: "#ffffff",
+            borderRadius: 16,
+            padding: 16,
+            borderWidth: 1,
+            borderColor: "#e5e7eb"
+          }}
+        >
+          <Text style={styles.title}>Вход</Text>
+          <Text style={styles.subtitle}>Демо-авторизация для mobile</Text>
+
+          <TextInput
+            value={demoName}
+            onChangeText={setDemoName}
+            placeholder="Введите имя"
+            style={{
+              borderWidth: 1,
+              borderColor: "#d1d5db",
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 12,
+              marginTop: 12,
+              marginBottom: 12,
+              fontSize: 16
+            }}
+          />
+
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setDemoRole("student")}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                alignItems: "center",
+                backgroundColor:
+                  demoRole === "student" ? "#111827" : "#ffffff",
+                borderWidth: 1,
+                borderColor: "#e5e7eb"
+              }}
+            >
+              <Text
+                style={{
+                  color: demoRole === "student" ? "#ffffff" : "#111827",
+                  fontWeight: "600"
+                }}
+              >
+                Студент
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => setDemoRole("teacher")}
+              style={{
+                flex: 1,
+                paddingVertical: 12,
+                borderRadius: 12,
+                alignItems: "center",
+                backgroundColor:
+                  demoRole === "teacher" ? "#111827" : "#ffffff",
+                borderWidth: 1,
+                borderColor: "#e5e7eb"
+              }}
+            >
+              <Text
+                style={{
+                  color: demoRole === "teacher" ? "#ffffff" : "#111827",
+                  fontWeight: "600"
+                }}
+              >
+                Преподаватель
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.reloadButton}
+            onPress={handleDemoLogin}
+          >
+            <Text style={styles.reloadButtonText}>Войти</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   const renderContent = () => {
-    if (loading || !favoritesHydrated) {
+    if (loading || !favoritesHydrated || !authHydrated) {
       return (
         <View style={styles.centerBlock}>
           <ActivityIndicator size="large" />
           <Text style={styles.infoText}>Загружаем данные...</Text>
         </View>
       );
+    }
+
+    if (!isAuthenticated) {
+      return renderLoginScreen();
     }
 
     if (error) {
@@ -127,15 +266,45 @@ export default function App(): React.JSX.Element {
 
     if (activeTab === "settings") {
       return (
-        <SettingsScreen
-          apiBaseUrl={API_BASE_URL}
-          lectureCount={lectures.length}
-          favoriteCount={favoriteLectures.length}
-          healthLoading={healthLoading}
-          healthText={healthText}
-          settingsReloading={settingsReloading}
-          onRefresh={handleSettingsRefresh}
-        />
+        <View style={{ flex: 1 }}>
+          <SettingsScreen
+            apiBaseUrl={API_BASE_URL}
+            lectureCount={lectures.length}
+            favoriteCount={favoriteLectures.length}
+            healthLoading={healthLoading}
+            healthText={healthText}
+            settingsReloading={settingsReloading}
+            onRefresh={handleSettingsRefresh}
+          />
+
+          <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+            <View
+              style={{
+                backgroundColor: "#ffffff",
+                borderRadius: 16,
+                padding: 16,
+                borderWidth: 1,
+                borderColor: "#e5e7eb",
+                gap: 8
+              }}
+            >
+              <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827" }}>
+                Пользователь
+              </Text>
+              <Text style={{ color: "#374151" }}>Имя: {user?.name ?? "-"}</Text>
+              <Text style={{ color: "#374151" }}>Роль: {user?.role ?? "-"}</Text>
+              <Text style={{ color: "#374151" }}>Токен: {token ?? "-"}</Text>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.reloadButton}
+                onPress={handleLogout}
+              >
+                <Text style={styles.reloadButtonText}>Выйти</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       );
     }
 
@@ -152,17 +321,19 @@ export default function App(): React.JSX.Element {
   };
 
   const headerSubtitle =
-    activeTab === "lectures"
-      ? "Список лекций через @vm/vm-api"
-      : activeTab === "favorites"
-        ? "Избранные лекции"
-        : "Параметры приложения";
+    !isAuthenticated
+      ? "Демо-авторизация"
+      : activeTab === "lectures"
+        ? "Список лекций через @vm/vm-api"
+        : activeTab === "favorites"
+          ? "Избранные лекции"
+          : "Параметры приложения";
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.container}>
-        {!(activeTab === "lectures" && selectedLectureId) ? (
+        {!(activeTab === "lectures" && selectedLectureId && isAuthenticated) ? (
           <View style={styles.header}>
             <Text style={styles.title}>VisualMath Mobile</Text>
             <Text style={styles.subtitle}>{headerSubtitle}</Text>
@@ -172,7 +343,7 @@ export default function App(): React.JSX.Element {
 
         <View style={styles.content}>{renderContent()}</View>
 
-        <TabBar activeTab={activeTab} onChange={switchTab} />
+        {isAuthenticated ? <TabBar activeTab={activeTab} onChange={switchTab} /> : null}
       </View>
     </SafeAreaView>
   );
