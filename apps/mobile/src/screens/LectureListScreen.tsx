@@ -1,11 +1,7 @@
 import React from "react";
-import {
-  FlatList,
-  RefreshControl,
-  Text,
-  View
-} from "react-native";
+import { FlatList, RefreshControl, Text, View } from "react-native";
 import { LectureCard } from "../components/LectureCard";
+import { SearchBar } from "../components/SearchBar";
 import { appStyles as styles } from "../styles/appStyles";
 import type { Lecture } from "../types/lecture";
 import { getLectureKey } from "../utils/lecture";
@@ -15,6 +11,8 @@ type LectureListScreenProps = {
   emptyText: string;
   favoriteIds: string[];
   refreshing: boolean;
+  searchQuery: string;
+  onSearchQueryChange: (value: string) => void;
   onRefresh: () => void;
   onOpenLecture: (lecture: Lecture, index: number) => void;
 };
@@ -24,6 +22,8 @@ export function LectureListScreen({
   emptyText,
   favoriteIds,
   refreshing,
+  searchQuery,
+  onSearchQueryChange,
   onRefresh,
   onOpenLecture
 }: LectureListScreenProps): React.JSX.Element {
@@ -36,6 +36,13 @@ export function LectureListScreen({
       }
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+      ListHeaderComponent={
+        <SearchBar
+          value={searchQuery}
+          onChangeText={onSearchQueryChange}
+          placeholder="Поиск по названию и описанию"
+        />
       }
       renderItem={({ item, index }) => (
         <LectureCard

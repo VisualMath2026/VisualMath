@@ -21,20 +21,36 @@ import { appStyles as styles } from "./src/styles/appStyles";
 import type { Lecture, TabKey } from "./src/types/lecture";
 import { getLectureKey } from "./src/utils/lecture";
 
+function matchesLectureSearch(lecture: Lecture, query: string): boolean {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const haystack = [
+    lecture.title,
+    lecture.description,
+    lecture.summary,
+    lecture.content,
+    lecture.text,
+    lecture.body
+  ]
+    .filter((value): value is string => typeof value === "string")
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(normalizedQuery);
+}
+
 export default function App(): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<TabKey>("lectures");
   const [selectedLectureId, setSelectedLectureId] = useState<string | null>(null);
   const [demoName, setDemoName] = useState("");
   const [demoRole, setDemoRole] = useState<"student" | "teacher">("student");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const {
-    token,
-    user,
-    authHydrated,
-    isAuthenticated,
-    login,
-    logout
-  } = useAuth();
+  const { token, user, authHydrated, isAuthenticated, login, logout } = useAuth();
 
   const {
     lectures,
@@ -55,6 +71,16 @@ export default function App(): React.JSX.Element {
     isFavorite,
     toggleFavorite
   } = useFavorites(lectures);
+
+  const filteredLectures = useMemo(() => {
+    return lectures.filter((lecture) => matchesLectureSearch(lecture, searchQuery));
+  }, [lectures, searchQuery]);
+
+  const filteredFavoriteLectures = useMemo(() => {
+    return favoriteLectures.filter((lecture) =>
+      matchesLectureSearch(lecture, searchQuery)
+    );
+  }, [favoriteLectures, searchQuery]);
 
   const selectedLecture = useMemo(() => {
     if (!selectedLectureId) {
@@ -103,6 +129,7 @@ export default function App(): React.JSX.Element {
     await logout();
     setSelectedLectureId(null);
     setActiveTab("lectures");
+    setSearchQuery("");
   }, [logout]);
 
   const switchTab = useCallback((tab: TabKey) => {
@@ -254,10 +281,12 @@ export default function App(): React.JSX.Element {
     if (activeTab === "favorites") {
       return (
         <LectureListScreen
-          data={favoriteLectures}
+          data={filteredFavoriteLectures}
           emptyText="Избранных лекций пока нет."
           favoriteIds={favoriteIds}
           refreshing={refreshing}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
           onRefresh={refreshLectures}
           onOpenLecture={openLecture}
         />
@@ -310,10 +339,12 @@ export default function App(): React.JSX.Element {
 
     return (
       <LectureListScreen
-        data={lectures}
+        data={filteredLectures}
         emptyText="Лекции не найдены."
         favoriteIds={favoriteIds}
         refreshing={refreshing}
+        searchQuery={searchQuery}
+        onSearchQueryChange={setSearchQuery}
         onRefresh={refreshLectures}
         onOpenLecture={openLecture}
       />
