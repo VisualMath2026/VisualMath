@@ -4,9 +4,11 @@ import {
   FlatList,
   RefreshControl,
   SafeAreaView,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View
 } from "react-native";
 
@@ -17,6 +19,9 @@ type Lecture = {
   title?: string;
   description?: string;
   summary?: string;
+  content?: string;
+  text?: string;
+  body?: string;
   updatedAt?: string;
 };
 
@@ -48,8 +53,42 @@ function normalizeLectures(payload: unknown): Lecture[] {
   return [];
 }
 
+function formatDate(value?: string): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString("ru-RU");
+}
+
+function getLecturePreview(lecture: Lecture): string {
+  return (
+    lecture.description?.trim() ||
+    lecture.summary?.trim() ||
+    "Описание пока не добавлено"
+  );
+}
+
+function getLectureContent(lecture: Lecture): string {
+  return (
+    lecture.content?.trim() ||
+    lecture.text?.trim() ||
+    lecture.body?.trim() ||
+    lecture.description?.trim() ||
+    lecture.summary?.trim() ||
+    "Полное содержание лекции пока не добавлено."
+  );
+}
+
 export default function App(): React.JSX.Element {
   const [lectures, setLectures] = useState<Lecture[]>([]);
+  const [selectedLecture, setSelectedLecture] = useState<Lecture | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +119,7 @@ export default function App(): React.JSX.Element {
         err instanceof Error ? err.message : "Не удалось загрузить лекции";
       setError(message);
       setLectures([]);
+      setSelectedLecture(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -95,27 +135,37 @@ export default function App(): React.JSX.Element {
     void loadLectures();
   }, [loadLectures]);
 
-  const renderItem = useCallback(
-    ({ item, index }: { item: Lecture; index: number }) => {
-      const title = item.title?.trim() || `Лекция ${index + 1}`;
-      const subtitle =
-        item.description?.trim() ||
-        item.summary?.trim() ||
-        "Описание пока не добавлено";
+  if (selectedLecture) {
+    const title = selectedLecture.title?.trim() || "Лекция";
+    const content = getLectureContent(selectedLecture);
+    const updatedAt = formatDate(selectedLecture.updatedAt);
 
-      return (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{title}</Text>
-          <Text style={styles.cardDescription}>{subtitle}</Text>
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" />
+        <ScrollView contentContainerStyle={styles.detailsScreen}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            style={styles.backButton}
+            onPress={() => setSelectedLecture(null)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={styles.backButtonText}>← Назад к списку</Text>
+          </TouchableOpacity>
 
-          {item.updatedAt ? (
-            <Text style={styles.cardMeta}>Обновлено: {item.updatedAt}</Text>
+          <Text style={styles.detailsTitle}>{title}</Text>
+
+          {updatedAt ? (
+            <Text style={styles.detailsMeta}>Обновлено: {updatedAt}</Text>
           ) : null}
-        </View>
-      );
-    },
-    []
-  );
+
+          <View style={styles.detailsCard}>
+            <Text style={styles.detailsText}>{content}</Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -145,13 +195,32 @@ export default function App(): React.JSX.Element {
             keyExtractor={(item, index) =>
               String(item.id ?? `lecture-${index}`)
             }
-            renderItem={renderItem}
             contentContainerStyle={
               lectures.length === 0 ? styles.emptyListContent : styles.listContent
             }
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
             }
+            renderItem={({ item, index }) => {
+              const title = item.title?.trim() || `Лекция ${index + 1}`;
+              const subtitle = getLecturePreview(item);
+              const updatedAt = formatDate(item.updatedAt);
+
+              return (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  style={styles.card}
+                  onPress={() => setSelectedLecture(item)}
+                >
+                  <Text style={styles.cardTitle}>{title}</Text>
+                  <Text style={styles.cardDescription}>{subtitle}</Text>
+
+                  {updatedAt ? (
+                    <Text style={styles.cardMeta}>Обновлено: {updatedAt}</Text>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            }}
             ListEmptyComponent={
               <View style={styles.centerBlock}>
                 <Text style={styles.infoText}>Лекции не найдены.</Text>
@@ -242,5 +311,48 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 12,
     color: "#6b7280"
+  },
+  detailsScreen: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24
+  },
+  backButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    marginBottom: 20
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827"
+  },
+  detailsTitle: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 8
+  },
+  detailsMeta: {
+    fontSize: 13,
+    color: "#6b7280",
+    marginBottom: 16
+  },
+  detailsCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb"
+  },
+  detailsText: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: "#374151"
   }
 });
