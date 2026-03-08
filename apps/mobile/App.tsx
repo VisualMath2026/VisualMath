@@ -34,8 +34,13 @@ export default function App(): React.JSX.Element {
     refreshFromSettings
   } = useLectures();
 
-  const { favoriteIds, favoriteLectures, isFavorite, toggleFavorite } =
-    useFavorites(lectures);
+  const {
+    favoriteIds,
+    favoriteLectures,
+    favoritesHydrated,
+    isFavorite,
+    toggleFavorite
+  } = useFavorites(lectures);
 
   const selectedLecture = useMemo(() => {
     if (!selectedLectureId) {
@@ -74,11 +79,11 @@ export default function App(): React.JSX.Element {
   }, []);
 
   const renderContent = () => {
-    if (loading) {
+    if (loading || !favoritesHydrated) {
       return (
         <View style={styles.centerBlock}>
           <ActivityIndicator size="large" />
-          <Text style={styles.infoText}>Загружаем лекции...</Text>
+          <Text style={styles.infoText}>Загружаем данные...</Text>
         </View>
       );
     }
