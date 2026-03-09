@@ -7,14 +7,15 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
+
 import { API_BASE_URL, lecturesUrl } from "./src/api/client";
 import { TabBar } from "./src/components/TabBar";
 import { useAuth } from "./src/hooks/useAuth";
 import { useFavorites } from "./src/hooks/useFavorites";
 import { useLectures } from "./src/hooks/useLectures";
-import { LectureDetailsScreen } from "./src/screens/LectureDetailsScreen";
+import LectureScreen from "./src/screens/LectureScreen";
 import { LectureListScreen } from "./src/screens/LectureListScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { appStyles as styles } from "./src/styles/appStyles";
@@ -34,13 +35,29 @@ function matchesLectureSearch(lecture: Lecture, query: string): boolean {
     lecture.summary,
     lecture.content,
     lecture.text,
-    lecture.body
+    lecture.body,
   ]
     .filter((value): value is string => typeof value === "string")
     .join(" ")
     .toLowerCase();
 
   return haystack.includes(normalizedQuery);
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function getLectureRecord(lecture: Lecture | null): Record<string, unknown> {
+  return lecture ? (lecture as unknown as Record<string, unknown>) : {};
 }
 
 export default function App(): React.JSX.Element {
@@ -61,7 +78,7 @@ export default function App(): React.JSX.Element {
     healthText,
     error,
     refreshLectures,
-    refreshFromSettings
+    refreshFromSettings,
   } = useLectures();
 
   const {
@@ -69,7 +86,7 @@ export default function App(): React.JSX.Element {
     favoriteLectures,
     favoritesHydrated,
     isFavorite,
-    toggleFavorite
+    toggleFavorite,
   } = useFavorites(lectures);
 
   const filteredLectures = useMemo(() => {
@@ -78,7 +95,7 @@ export default function App(): React.JSX.Element {
 
   const filteredFavoriteLectures = useMemo(() => {
     return favoriteLectures.filter((lecture) =>
-      matchesLectureSearch(lecture, searchQuery)
+      matchesLectureSearch(lecture, searchQuery),
     );
   }, [favoriteLectures, searchQuery]);
 
@@ -89,10 +106,46 @@ export default function App(): React.JSX.Element {
 
     return (
       lectures.find(
-        (lecture, index) => getLectureKey(lecture, index) === selectedLectureId
+        (lecture, index) => getLectureKey(lecture, index) === selectedLectureId,
       ) ?? null
     );
   }, [lectures, selectedLectureId]);
+
+  const selectedLectureParams = useMemo(() => {
+    const record = getLectureRecord(selectedLecture);
+
+    return {
+      lectureId:
+        selectedLectureId ??
+        readString(record.id) ??
+        readString(record.slug) ??
+        "lecture",
+      lectureTitle:
+        readString(record.title) ??
+        readString(record.name) ??
+        "Лекция",
+      lectureDescription:
+        readString(record.description) ??
+        readString(record.summary) ??
+        null,
+      lectureAuthor:
+        readString(record.author) ??
+        readString(record.authorName) ??
+        null,
+      lectureSubject:
+        readString(record.subject) ??
+        readString(record.category) ??
+        null,
+      lectureSemester: readString(record.semester),
+      lectureLevel: readString(record.level),
+      lectureTags: readStringArray(record.tags),
+      lectureUpdatedAt:
+        readString(record.updatedAt) ??
+        readString(record.updated_at) ??
+        readString(record.lastUpdatedAt) ??
+        null,
+    };
+  }, [selectedLecture, selectedLectureId]);
 
   const handleSettingsRefresh = useCallback(async () => {
     const ok = await refreshFromSettings();
@@ -118,8 +171,8 @@ export default function App(): React.JSX.Element {
         id: "demo-user",
         name: normalizedName,
         role: demoRole,
-        group: demoRole === "student" ? "ИВТ-101" : undefined
-      }
+        group: demoRole === "student" ? "ИВТ-101" : undefined,
+      },
     });
 
     setDemoName("");
@@ -156,7 +209,7 @@ export default function App(): React.JSX.Element {
             borderRadius: 16,
             padding: 16,
             borderWidth: 1,
-            borderColor: "#e5e7eb"
+            borderColor: "#e5e7eb",
           }}
         >
           <Text style={styles.title}>Вход</Text>
@@ -174,7 +227,7 @@ export default function App(): React.JSX.Element {
               paddingVertical: 12,
               marginTop: 12,
               marginBottom: 12,
-              fontSize: 16
+              fontSize: 16,
             }}
           />
 
@@ -187,16 +240,15 @@ export default function App(): React.JSX.Element {
                 paddingVertical: 12,
                 borderRadius: 12,
                 alignItems: "center",
-                backgroundColor:
-                  demoRole === "student" ? "#111827" : "#ffffff",
+                backgroundColor: demoRole === "student" ? "#111827" : "#ffffff",
                 borderWidth: 1,
-                borderColor: "#e5e7eb"
+                borderColor: "#e5e7eb",
               }}
             >
               <Text
                 style={{
                   color: demoRole === "student" ? "#ffffff" : "#111827",
-                  fontWeight: "600"
+                  fontWeight: "600",
                 }}
               >
                 Студент
@@ -211,16 +263,15 @@ export default function App(): React.JSX.Element {
                 paddingVertical: 12,
                 borderRadius: 12,
                 alignItems: "center",
-                backgroundColor:
-                  demoRole === "teacher" ? "#111827" : "#ffffff",
+                backgroundColor: demoRole === "teacher" ? "#111827" : "#ffffff",
                 borderWidth: 1,
-                borderColor: "#e5e7eb"
+                borderColor: "#e5e7eb",
               }}
             >
               <Text
                 style={{
                   color: demoRole === "teacher" ? "#ffffff" : "#111827",
-                  fontWeight: "600"
+                  fontWeight: "600",
                 }}
               >
                 Преподаватель
@@ -265,15 +316,9 @@ export default function App(): React.JSX.Element {
 
     if (activeTab === "lectures" && selectedLectureId) {
       return (
-        <LectureDetailsScreen
-          lecture={selectedLecture}
-          isFavorite={selectedLecture ? isFavorite(selectedLecture) : false}
-          onBack={closeLecture}
-          onToggleFavorite={() => {
-            if (selectedLecture) {
-              toggleFavorite(selectedLecture);
-            }
-          }}
+        <LectureScreen
+          navigation={{ goBack: closeLecture }}
+          route={{ params: selectedLectureParams }}
         />
       );
     }
@@ -314,7 +359,7 @@ export default function App(): React.JSX.Element {
                 padding: 16,
                 borderWidth: 1,
                 borderColor: "#e5e7eb",
-                gap: 8
+                gap: 8,
               }}
             >
               <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827" }}>

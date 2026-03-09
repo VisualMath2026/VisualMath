@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+iimport React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 
 import CatalogSyncInfo from "../components/CatalogSyncInfo";
 import FilterChip from "../components/FilterChip";
@@ -16,27 +17,18 @@ import LectureListCard from "../components/LectureListCard";
 import { fetchLectures } from "../features/lectures/api/fetchLectures";
 import { useLectures } from "../features/lectures/hooks/useLectures";
 import { buildLectureRouteParams } from "../features/lectures/utils/buildLectureRouteParams";
+import {
+  getLectureProgressStatus,
+  useLectureProgressMap,
+} from "../hooks/useLectureProgress";
 import { useFavorites } from "../hooks/useFavorites";
+import { formatDateTime } from "../utils/formatDateTime";
 
 type LecturesListScreenProps = {
   navigation: {
     navigate: (screenName: string, params?: Record<string, unknown>) => void;
   };
 };
-
-function formatLastUpdated(value: string | null): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date.toLocaleString("ru-RU");
-}
 
 function normalizeSubject(subject: string): string {
   return subject.trim();
@@ -60,6 +52,13 @@ export function LecturesListScreen({ navigation }: LecturesListScreenProps) {
   });
 
   const { favorites, toggleFavorite } = useFavorites();
+  const { progressMap, reload } = useLectureProgressMap();
+
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+    }, [reload]),
+  );
 
   const [selectedSubject, setSelectedSubject] = useState<string>("all");
   const [showOnlyFavorites, setShowOnlyFavorites] = useState(false);
@@ -97,7 +96,7 @@ export function LecturesListScreen({ navigation }: LecturesListScreenProps) {
     return result;
   }, [favoriteIds, filteredLectures, selectedSubject, showOnlyFavorites]);
 
-  const lastUpdatedLabel = formatLastUpdated(lastUpdated);
+  const lastUpdatedLabel = formatDateTime(lastUpdated);
 
   if (isLoading && visibleLectures.length === 0) {
     return (
@@ -172,6 +171,7 @@ export function LecturesListScreen({ navigation }: LecturesListScreenProps) {
           <LectureListCard
             item={item}
             isFavorite={favoriteIds.has(item.id)}
+            progressStatus={getLectureProgressStatus(progressMap, item.id)}
             onPress={() =>
               navigation.navigate("Lecture", buildLectureRouteParams(item))
             }

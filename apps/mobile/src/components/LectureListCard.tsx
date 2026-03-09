@@ -2,40 +2,35 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import FavoriteButton from "./FavoriteButton";
+import LectureProgressBadge from "./LectureProgressBadge";
 import type { LectureSummary } from "../features/lectures/types";
+import type { LectureProgressStatus } from "../hooks/useLectureProgress";
+import { formatDateTime } from "../utils/formatDateTime";
 
 type LectureListCardProps = {
   item: LectureSummary;
   isFavorite: boolean;
+  progressStatus: LectureProgressStatus;
   onPress: () => void;
   onToggleFavorite: () => void;
 };
 
-function formatLastUpdated(value: string | null | undefined): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date.toLocaleString("ru-RU");
-}
-
 export function LectureListCard({
   item,
   isFavorite,
+  progressStatus,
   onPress,
   onToggleFavorite,
 }: LectureListCardProps) {
-  const updatedAtLabel = formatLastUpdated(item.updatedAt);
+  const updatedAtLabel = formatDateTime(item.updatedAt);
 
   return (
     <View style={styles.card}>
       <Pressable onPress={onPress} style={styles.cardMain}>
+        <View style={styles.topRow}>
+          <LectureProgressBadge status={progressStatus} />
+        </View>
+
         <Text style={styles.cardTitle}>{item.title}</Text>
 
         <Text style={styles.cardDescription}>
@@ -81,6 +76,10 @@ const styles = StyleSheet.create({
   },
   cardMain: {
     paddingRight: 4,
+  },
+  topRow: {
+    flexDirection: "row",
+    marginBottom: 10,
   },
   cardTitle: {
     fontSize: 20,

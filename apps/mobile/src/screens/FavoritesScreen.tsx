@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 
 import CatalogSyncInfo from "../components/CatalogSyncInfo";
 import LectureListCard from "../components/LectureListCard";
@@ -15,27 +16,18 @@ import { fetchLectures } from "../features/lectures/api/fetchLectures";
 import { useLectures } from "../features/lectures/hooks/useLectures";
 import { buildLectureRouteParams } from "../features/lectures/utils/buildLectureRouteParams";
 import { filterLectures } from "../features/lectures/utils/filterLectures";
+import {
+  getLectureProgressStatus,
+  useLectureProgressMap,
+} from "../hooks/useLectureProgress";
 import { useFavorites } from "../hooks/useFavorites";
+import { formatDateTime } from "../utils/formatDateTime";
 
 type FavoritesScreenProps = {
   navigation: {
     navigate: (screenName: string, params?: Record<string, unknown>) => void;
   };
 };
-
-function formatLastUpdated(value: string | null): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return date.toLocaleString("ru-RU");
-}
 
 export function FavoritesScreen({ navigation }: FavoritesScreenProps) {
   const {
@@ -52,7 +44,14 @@ export function FavoritesScreen({ navigation }: FavoritesScreenProps) {
   });
 
   const { favorites, toggleFavorite } = useFavorites();
+  const { progressMap, reload } = useLectureProgressMap();
   const [query, setQuery] = useState("");
+
+  useFocusEffect(
+    useCallback(() => {
+      void reload();
+    }, [reload]),
+  );
 
   const favoriteIds = useMemo(() => new Set(favorites), [favorites]);
 
@@ -62,7 +61,7 @@ export function FavoritesScreen({ navigation }: FavoritesScreenProps) {
     return filterLectures(onlyFavorites, query);
   }, [favoriteIds, lectures, query]);
 
-  const lastUpdatedLabel = formatLastUpdated(lastUpdated);
+  const lastUpdatedLabel = formatDateTime(lastUpdated);
 
   if (isLoading && favoriteLectures.length === 0) {
     return (
@@ -109,6 +108,7 @@ export function FavoritesScreen({ navigation }: FavoritesScreenProps) {
           <LectureListCard
             item={item}
             isFavorite
+            progressStatus={getLectureProgressStatus(progressMap, item.id)}
             onPress={() =>
               navigation.navigate("Lecture", buildLectureRouteParams(item))
             }
